@@ -1,0 +1,107 @@
+---
+title: "DM_Clustering_Lab"
+author: "Jason Wang"
+date: "2024-10-10"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(DataExplorer)
+library(cluster)
+
+```
+```{r}
+teens4clean <- teens4 %>%
+  mutate(gender = as.character(gender)) %>%
+  replace_na(list(gender = "missing"))
+teens4clean$age <- as.factor(floor(teens4clean$age))
+teens4clean$gender <- as.factor(teens4clean$gender)
+teens4clean$gradyear <- as.factor(teens4clean$gradyear)
+```
+
+```{r fix skewness}
+teens4clean <- teens4clean %>%
+  mutate(across(where(is.numeric), ~ log(. + 1)))
+```
+```{r}
+teens.scal <- teens4clean %>%
+  select(where(is.numeric)) %>%
+  scale()
+
+teens.scal <- teens.scal %>%
+  cbind(teens4clean[,1:3])
+```
+
+```{r}
+library(NbClust)
+library(factoextra)
+set.seed(123)
+
+teens.matrix <- model.matrix(~., teens.scal)
+
+teens.matrix <- teens.matrix[,-1]
+
+teens.matrix <- as.data.frame(teens.matrix)
+```
+
+
+```{r k means}
+wss <- fviz_nbclust(teens.matrix, kmeans, method = "wss", k.max = 7,)
+#Best is 3
+```
+
+```{r}
+silhouette <- fviz_nbclust(teens.matrix, kmeans, method = "silhouette", k.max = 7,)
+```
+
+```{r}
+gap_stat = clusGap(teens.matrix, FUN = kmeans, nstart = 25, K.max = 7, B = 50)
+fviz_gap_stat(gap_stat)
+```
+
+```{r}
+wss
+silhouette
+gap_stat
+```
+
+
+```{r}
+clus = kmeans(teens.matrix, centers = 4, nstart = 25)
+clus
+fviz_cluster(clus, data = teens.matrix)
+```
+
+```{r}
+dist.teens = dist(teens.matrix, method = "euclidean")
+h1.comp.eucl = agnes(dist.teens, method = "complete")
+```
+
+```{r}
+pltree(h1.comp.eucl, cex = 0.6, hang = -1, main = "Dendrogram of agnes")
+
+```
+
+```{r}
+h1.comp.eucl$ac
+```
+```{r}
+m <-c("average", "single", "complete", "ward")
+names(m) <- c("average", "single", "complete", "ward")
+
+ac <- function(x) {
+  agnes(dist.teens, method = x)$ac
+}
+
+map_dbl(m,ac)
+```
+
+```{r}
+
+```
+
+
+
+
+

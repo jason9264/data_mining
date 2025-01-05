@@ -1,0 +1,227 @@
+---
+title: "Data_Mining_HW1"
+author: "Jason Wang"
+date: "2024-10-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readr)
+library(dplyr)
+library(arules)
+library(arulesViz)
+library(ggplot2)
+```
+
+## R Markdown
+
+```{r}
+# Read in data
+data <- read_csv('https://raw.githubusercontent.com/sjsimmo2/DataMining-Fall/refs/heads/master/orderData.csv')
+head(data)
+```
+```{r}
+# Create transactional data by making the data whide
+
+#create id column to make unique identification for each individual customer order
+data$id <- paste(data$orderNo, data$seatNo, sep = "_")
+trans.dat <- as(split(data$item, data$id), "transactions")
+
+```
+
+```{r}
+trans.dat@itemInfo$labels
+```
+
+```{r}
+# Split food choices into various groups to make lhs and rhs choice is association analysis easier
+meats<-c("Sea Bass","Salmon","Pork Chop","Duck Breast","Swordfish","Pork Tenderloin",
+        "Filet Mignon","Roast Chicken")
+fish <- c('Sea Bass', 'Salmon', 'Swordfish')
+poultry <- c('Duck Breast', 'Roast Chicken')
+pork <- c('Pork Tenderloin', 'Pork Chop')
+
+beef <- c('Filet Mignon')
+
+sides<-c("Bean Trio","Caesar Salad","Roasted Potatoes","Warm Goat Salad","Mashed Potatoes"
+        ,"Roasted Root Veg","Seasonal Veg")
+
+wine<-c("Three Rivers Red", "Total Recall Chardonnay","Innocent Bystander Sauvignon Blanc",
+       "Single Vineyard Malbec","Duckhorn Chardonnay","Helben Blanc","Cantina Pinot Bianco",
+       "Brancott Pinot Grigio", "Adelsheim Pinot Noir","Echeverria Gran Syrah","Blackstone Merlot",
+       "Louis Rouge","Oyster Bay Sauvignon Blanc")
+
+reds<-c("Three Rivers Red","Innocent Bystander Sauvignon Blanc","Single Vineyard Malbec",
+        "Adelsheim Pinot Noir","Echeverria Gran Syrah","Blackstone Merlot" ,"Louis Rouge")
+white<-c("Total Recall Chardonnay","Duckhorn Chardonnay","Helben Blanc","Brancott Pinot Grigio",
+         "Cantina Pinot Bianco","Oyster Bay Sauvignon Blanc")
+```
+
+```{r}
+# Create a summary of the frequency of each meat item
+meat_items <- c(fish, poultry, pork, beef)
+
+# Get the frequency of each meat item in the dataset
+meat_frequencies <- data %>%
+  filter(item %in% meat_items) %>%
+  group_by(item) %>%
+  summarise(frequency = n()) %>%
+  arrange(desc(frequency))
+
+# Display the frequency of each meat item
+print(meat_frequencies)
+
+```
+
+```{r}
+
+ggplot(meat_frequencies, aes(x = reorder(item, -frequency), y = frequency)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(title = "Meat Item Frequency Distribution", x = "Meat Item", y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+
+
+```
+
+```{r}
+#Examine frequency of most popular items 
+itemFrequencyPlot(trans.dat,topN=3,type="absolute")
+```
+
+
+```{r}
+
+
+#make a column that just had red or whites (takes brand out) and the meats
+eat<-data %>%
+     mutate(items_wine=case_when((item %in% reds)~'reds',
+                              (item %in% white)~ 'whites',
+                              .default=item),
+            distinct_customer_order=paste(orderNo,seatNo,sep='-'))
+
+#using this grouped ds for graphs
+eat_grouped <-eat %>%
+              mutate(red_w=case_when((item %in% reds)~1,
+                              .default=0),
+              white_w=case_when((item %in% white)~1,
+                              .default=0),
+              wine_only=case_when((item %in% wine)~item,
+                              .default='ZZZZZZ'),
+              meat_only=case_when((item %in% meats)~item,
+                              .default='ZZZZZZZ'),
+              wine_type=case_when((item %in% reds)~'reds',
+                              (item %in% white)~ 'whites',
+                              .default='ZZZZZZZZZZ'),) %>%
+              group_by(distinct_customer_order) %>%
+              summarize(meat=min(meat_only),wine=min(wine_only),
+                        num_red=sum(red_w),num_white=sum(white_w),
+                        wine_type=min(wine_type))
+
+
+#plot freq of red and whites for each meat to visualize
+#chicken and fish offer white and pork and beef offer red
+eat_grouped %>%
+  group_by(meat,wine_type) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100) %>% 
+               ggplot(aes(x = meat,y=percentage,fill=wine_type)) +
+               geom_bar(stat='identity',position='dodge') +  # Fill colors by category
+               labs(title = "Percent of Wine Types Per Meat",
+               x = "Meat",
+               y = "Percent of Wine Type",
+               fill='Wine Types') +
+               theme_classic()+
+               scale_fill_manual(values = c("reds" = "deeppink4", "whites" = "bisque1"))+
+               theme(
+               plot.title = element_text(face = "bold", size = 16),
+               axis.title = element_text(face = "bold"),
+               axis.text.x = element_text(angle = 45, hjust = 1),
+               legend.position = "right" ) 
+
+```
+```{r}
+wine_frequencies <- data %>%
+  filter(item %in% wine) %>%
+  group_by(item) %>%
+  summarise(frequency = n()) %>%
+  arrange(desc(frequency))
+
+# Display the frequency of each meat item
+print(wine_frequencies)
+```
+```{r}
+ggplot(wine_frequencies, aes(x = reorder(item, -frequency), y = frequency)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(title = "Wine Distribution ", x = "Wine Item", y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+
+```
+```{r}
+# First, we need to categorize the wine types (red or white) in the `wine_frequencies` data frame
+wine_frequencies <- data %>%
+  filter(item %in% wine) %>%
+  group_by(item) %>%
+  summarise(frequency = n()) %>%
+  arrange(desc(frequency)) %>%
+  mutate(wine_type = case_when(
+    item %in% reds ~ "reds",
+    item %in% white ~ "whites",
+    TRUE ~ "other"
+  ))
+
+# Now plot the wine frequencies, coloring by the wine type, and label the legend as "Wine Types"
+ggplot(wine_frequencies, aes(x = reorder(item, -frequency), y = frequency, fill = wine_type)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Wine Distribution by Type", x = "Wine Item", y = "Frequency", fill = "Wine Color") +
+  scale_fill_manual(values = c("reds" = "deeppink4", "whites" = "bisque1")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right")
+
+```
+
+
+
+```{r}
+# Get the rules
+rules <- apriori(trans.dat, parameter = list(supp = 0.009, conf = 0.0001, minlen=2),
+                 appearance = list(lhs = meats,
+                                   rhs = wine))
+```
+```{r}
+# Sort rules and inspect
+rules<-sort(rules, by="confidence", decreasing=TRUE)
+
+inspect(rules)
+```
+
+```{r}
+
+eat_mw_only<-eat %>%
+  filter(!item %in% sides)
+
+#make another transaction with the wines as red or white
+trans.eat_2 <- as(split(eat_mw_only$items_wine, eat_mw_only$distinct_customer_order), "transactions")
+
+	
+rules_2<- apriori(trans.eat_2, parameter = list(support=0.03,minlen=2,maxtime=60,confidence=0.1,target="rules"))
+rules_2<-sort(rules_2, by="confidence", decreasing=TRUE)
+inspect(rules_2)
+
+#graph the top 20 rules for wine types and meat
+top20rules_2 = head(rules, n=20,by = "confidence")
+plot(top20rules_2, method = "graph", engine = "htmlwidget")
+```
+
+
+
+
+
+
+
+
